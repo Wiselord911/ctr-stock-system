@@ -3,7 +3,6 @@ services:
     name: ctr-stock-system
     env: python
     plan: free
-    runtime: python-3.11.9
     buildCommand: |
       pip install --upgrade pip setuptools wheel
       pip install -r requirements.txt
