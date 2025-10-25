@@ -6,7 +6,7 @@ from datetime import datetime
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from flask import (
-    Flask, render_template, request, redirect, url_for, flash
+    Flask, render_template, request, redirect, url_for, flash, jsonify
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -15,9 +15,9 @@ from flask_login import (
 from passlib.hash import pbkdf2_sha256
 from dotenv import load_dotenv
 
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # ENV & APP
-# --------------------------------------------------
+# -------------------------------------------------------------------
 load_dotenv()
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -26,25 +26,28 @@ app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.join(BASE_DIR, 'ctr_stock.db')}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Email config (SMTP)
+db = SQLAlchemy(app)
+
+# login
+login_manager = LoginManager(app)
+login_manager.login_view = "login_get"
+
+# email
+MAIL_ENABLED = os.getenv("MAIL_ENABLED", "true").lower() == "true"
 MAIL_SERVER = os.getenv("MAIL_SERVER", "")
-MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))           # 587 = STARTTLS
+MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
 MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")
 MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
 MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "true").lower() == "true"
 MAIL_SENDER = os.getenv("MAIL_SENDER", MAIL_USERNAME or "no-reply@example.com")
 
-# Token serializer for reset password
+# password reset token
 SECURITY_PASSWORD_SALT = os.getenv("SECURITY_PASSWORD_SALT", "salt-for-reset")
 serializer = URLSafeTimedSerializer(app.secret_key)
 
-db = SQLAlchemy(app)
-login_manager = LoginManager(app)
-login_manager.login_view = "login_get"
-
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # MODELS
-# --------------------------------------------------
+# -------------------------------------------------------------------
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -73,24 +76,23 @@ class StockLog(db.Model):
     actor_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# --------------------------------------------------
-# AUTO INIT DB FOR GUNICORN (runs on import)
-# --------------------------------------------------
+# --- auto init DB even when running under gunicorn ---
 def _ensure_db_initialized():
     try:
         with app.app_context():
-            db.create_all()  # รันทุกครั้งที่แอป import (ไม่ซ้ำ ไม่พัง)
+            db.create_all()
     except Exception as e:
         app.logger.exception(f"DB init failed: {e}")
-
 _ensure_db_initialized()
 
-
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # HELPERS
-# --------------------------------------------------
+# -------------------------------------------------------------------
 def send_email(subject: str, recipient: str, html_body: str, text_body: str = "") -> bool:
-    """ส่งอีเมลผ่าน SMTP (STARTTLS)"""
+    """ส่งอีเมลผ่าน SMTP ถ้าตั้งค่าไว้; ถ้าส่งไม่ได้คืน False (ไม่ทำให้ระบบล้ม)"""
+    if not MAIL_ENABLED:
+        app.logger.info("MAIL_ENABLED is False → skip sending email")
+        return False
     if not (MAIL_SERVER and MAIL_USERNAME and MAIL_PASSWORD):
         app.logger.error("EMAIL NOT CONFIGURED: missing MAIL_SERVER/MAIL_USERNAME/MAIL_PASSWORD")
         return False
@@ -102,7 +104,7 @@ def send_email(subject: str, recipient: str, html_body: str, text_body: str = ""
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
     try:
-        with smtplib.SMTP(MAIL_SERVER, MAIL_PORT) as server:
+        with smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=10) as server:
             if MAIL_USE_TLS:
                 server.starttls()
             server.login(MAIL_USERNAME, MAIL_PASSWORD)
@@ -116,22 +118,21 @@ def generate_reset_token(email: str) -> str:
     return serializer.dumps(email, salt=SECURITY_PASSWORD_SALT)
 
 def verify_reset_token(token: str, max_age_seconds: int = 3600) -> str | None:
-    """คืนค่า email ถ้า token ถูกต้องและยังไม่หมดอายุ (ดีฟอลต์ 1 ชม.)"""
     try:
         return serializer.loads(token, salt=SECURITY_PASSWORD_SALT, max_age=max_age_seconds)
     except (SignatureExpired, BadSignature):
         return None
 
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # LOGIN MANAGER
-# --------------------------------------------------
+# -------------------------------------------------------------------
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # AUTH
-# --------------------------------------------------
+# -------------------------------------------------------------------
 @app.get("/login")
 def login_get():
     return render_template("login.html", title="เข้าสู่ระบบ")
@@ -176,13 +177,12 @@ def logout():
     flash("ออกจากระบบแล้ว", "info")
     return redirect(url_for("login_get"))
 
-# ---------- Reset Password (FULL) ----------
+# ---------- Reset Password ----------
 @app.route("/reset_request", methods=["GET", "POST"])
 def reset_request():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         user = User.query.filter_by(email=email).first()
-        # เพื่อความปลอดภัย ไม่เฉลยว่าอีเมลมี/ไม่มี
         if user:
             token = generate_reset_token(user.email)
             reset_link = url_for("reset_password", token=token, _external=True)
@@ -190,8 +190,7 @@ def reset_request():
             text = f"กดลิงก์เพื่อตั้งรหัสผ่านใหม่: {reset_link}"
             ok = send_email("ตั้งรหัสผ่านใหม่ - CTR STOCK SYSTEM", user.email, html, text)
             if not ok:
-                flash("ส่งอีเมลไม่สำเร็จ กรุณาตรวจสอบการตั้งค่าเมลของเซิร์ฟเวอร์", "danger")
-                return redirect(url_for("reset_request"))
+                flash("ไม่สามารถส่งอีเมลได้ (ระบบยังส่งออกไม่ได้) แต่ลิงก์รีเซ็ตถูกสร้างแล้ว", "warning")
         flash("ถ้าอีเมลนี้อยู่ในระบบ เราได้ส่งลิงก์รีเซ็ตรหัสผ่านให้แล้ว (ลิงก์มีอายุ 60 นาที)", "info")
         return redirect(url_for("login_get"))
     return render_template("reset_request.html", title="ลืมรหัสผ่าน")
@@ -220,9 +219,9 @@ def reset_password(token):
 
     return render_template("reset_password.html", email=email, title="ตั้งรหัสผ่านใหม่")
 
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # DASHBOARD
-# --------------------------------------------------
+# -------------------------------------------------------------------
 @app.get("/")
 @login_required
 def dashboard():
@@ -245,9 +244,9 @@ def dashboard():
         title="แดชบอร์ด"
     )
 
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # ITEMS
-# --------------------------------------------------
+# -------------------------------------------------------------------
 @app.get("/items")
 @login_required
 def items():
@@ -303,9 +302,8 @@ def item_create():
         db.session.commit()
         flash("เพิ่มสินค้าเรียบร้อย", "success")
         return redirect(url_for("items"))
-    return render_template(
-        "item_form.html", categories=Category.query.order_by(Category.name).all()
-    )
+    return render_template("item_form.html",
+                           categories=Category.query.order_by(Category.name).all())
 
 @app.route("/item/update/<int:item_id>", methods=["GET", "POST"])
 @login_required
@@ -314,10 +312,12 @@ def item_update(item_id):
     if request.method == "POST":
         new_name = request.form.get("name", "").strip()
         item.name = new_name
+        item.category_id = request.form.get("category_id") or None
         db.session.commit()
-        flash("แก้ไขชื่อสินค้าเรียบร้อย", "success")
+        flash("แก้ไขสินค้าเรียบร้อย", "success")
         return redirect(url_for("items"))
-    return render_template("item_form.html", item=item, categories=Category.query.all())
+    return render_template("item_form.html", item=item,
+                           categories=Category.query.order_by(Category.name).all())
 
 @app.post("/item/delete/<int:item_id>")
 @login_required
@@ -328,9 +328,34 @@ def item_delete(item_id):
     flash(f"ลบสินค้า {item.name} แล้ว", "info")
     return redirect(url_for("items"))
 
-# --------------------------------------------------
+# -------------------------------------------------------------------
+# API for typeahead search (used by receive/issue)
+# -------------------------------------------------------------------
+@app.get("/api/items")
+@login_required
+def api_items():
+    q = request.args.get("q", "").strip()
+    limit = int(request.args.get("limit", "20"))
+    base = Item.query
+    if q:
+        base = base.filter(Item.name.contains(q))
+    results = base.order_by(Item.name).limit(limit).all()
+
+    payload = []
+    for it in results:
+        rec = sum([r.quantity for r in StockLog.query.filter_by(item_id=it.id, type="receive").all()])
+        iss = sum([i.quantity for i in StockLog.query.filter_by(item_id=it.id, type="issue").all()])
+        payload.append({
+            "id": it.id,
+            "name": it.name,
+            "category": it.category.name if it.category else None,
+            "balance": rec - iss
+        })
+    return jsonify(payload)
+
+# -------------------------------------------------------------------
 # RECEIVE
-# --------------------------------------------------
+# -------------------------------------------------------------------
 @app.get("/receive")
 @login_required
 def receive():
@@ -359,27 +384,26 @@ def receive():
     return render_template(
         "receive.html",
         receive_logs=data,
-        items_select=Item.query.order_by(Item.name).all(),
-        categories=Category.query.order_by(Category.name).all(),
+        # ไม่ต้องเตรียม select ยาว ๆ เพราะใช้ typeahead แทน
         title="รับเข้าสินค้า"
     )
 
 @app.post("/receive")
 @login_required
 def receive_post():
-    item_id = request.form.get("item_id")
-    qty = int(request.form.get("quantity", 0))
+    item_id = request.form.get("item_id", "").strip()
+    qty = int(request.form.get("quantity", "0"))
     expiry = request.form.get("expiry_date")
     batch = request.form.get("batch_code")
     note = request.form.get("note")
 
     if not item_id or qty <= 0:
-        flash("กรุณากรอกข้อมูลให้ครบถ้วน", "danger")
+        flash("กรุณาเลือกสินค้าและระบุจำนวนที่ถูกต้อง", "danger")
         return redirect(url_for("receive"))
 
     expiry_date = datetime.strptime(expiry, "%Y-%m-%d").date() if expiry else None
     log = StockLog(
-        item_id=item_id, quantity=qty, type="receive",
+        item_id=int(item_id), quantity=qty, type="receive",
         expiry_date=expiry_date, batch_code=batch, note=note,
         actor_id=current_user.id
     )
@@ -388,9 +412,9 @@ def receive_post():
     flash("บันทึกรับเข้าสินค้าเรียบร้อย", "success")
     return redirect(url_for("receive"))
 
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # ISSUE
-# --------------------------------------------------
+# -------------------------------------------------------------------
 @app.get("/issue")
 @login_required
 def issue():
@@ -414,55 +438,43 @@ def issue():
             "created_at": log.created_at
         })
 
-    # คำนวณคงเหลือของแต่ละสินค้า
-    items_with_balance = []
-    for it in Item.query.all():
-        rec = sum([r.quantity for r in StockLog.query.filter_by(item_id=it.id, type="receive").all()])
-        iss = sum([i.quantity for i in StockLog.query.filter_by(item_id=it.id, type="issue").all()])
-        items_with_balance.append({"id": it.id, "name": it.name, "balance": rec - iss})
-
-    return render_template(
-        "issue.html",
-        issue_logs=data,
-        items_select=items_with_balance,
-        categories=Category.query.order_by(Category.name).all(),
-        title="เบิกออกสินค้า"
-    )
+    return render_template("issue.html", issue_logs=data, title="เบิกออกสินค้า")
 
 @app.post("/issue")
 @login_required
 def issue_post():
-    item_id = request.form.get("item_id")
-    qty = int(request.form.get("quantity", 0))
+    item_id = request.form.get("item_id", "").strip()
+    qty = int(request.form.get("quantity", "0"))
     note = request.form.get("note", "")
+
+    if not item_id or qty <= 0:
+        flash("กรุณาเลือกสินค้าและระบุจำนวนที่ถูกต้อง", "danger")
+        return redirect(url_for("issue"))
 
     rec = sum([r.quantity for r in StockLog.query.filter_by(item_id=item_id, type="receive").all()])
     iss = sum([i.quantity for i in StockLog.query.filter_by(item_id=item_id, type="issue").all()])
     balance = rec - iss
 
-    if qty <= 0 or qty > balance:
-        flash("จำนวนเบิกไม่ถูกต้อง หรือเกินจำนวนคงเหลือ", "danger")
+    if qty > balance:
+        flash("จำนวนเบิกเกินจำนวนคงเหลือ", "danger")
         return redirect(url_for("issue"))
 
     log = StockLog(
-        item_id=item_id, quantity=qty, type="issue",
-        note=note, actor_id=current_user.id
+        item_id=int(item_id), quantity=qty, type="issue", note=note, actor_id=current_user.id
     )
     db.session.add(log)
     db.session.commit()
     flash("บันทึกการเบิกออกเรียบร้อย", "success")
     return redirect(url_for("issue"))
 
-# --------------------------------------------------
-# CATEGORY
-# --------------------------------------------------
+# -------------------------------------------------------------------
+# CATEGORIES
+# -------------------------------------------------------------------
 @app.route("/categories", methods=["GET"])
 @login_required
 def categories():
     cats = Category.query.order_by(Category.name).all()
-    data = []
-    for c in cats:
-        data.append({"id": c.id, "name": c.name, "item_count": len(c.items)})
+    data = [{"id": c.id, "name": c.name, "item_count": len(c.items)} for c in cats]
     return render_template("categories.html", categories=data, title="ประเภทสินค้า")
 
 @app.post("/category/create")
@@ -501,9 +513,9 @@ def category_delete(category_id):
     flash(f"ลบประเภท {cat.name} แล้ว", "info")
     return redirect(url_for("categories"))
 
-# --------------------------------------------------
+# -------------------------------------------------------------------
 # REPORTS
-# --------------------------------------------------
+# -------------------------------------------------------------------
 @app.get("/reports")
 @login_required
 def reports():
@@ -548,9 +560,9 @@ def reports():
         title="รายงานสรุปสต็อก"
     )
 
-# --------------------------------------------------
-# UTIL: INIT DB (ใช้ครั้งเดียว แล้วลบทิ้งได้)
-# --------------------------------------------------
+# -------------------------------------------------------------------
+# UTIL
+# -------------------------------------------------------------------
 @app.route("/initdb")
 def initdb():
     try:
@@ -559,9 +571,9 @@ def initdb():
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
-# --------------------------------------------------
-# MAIN
-# --------------------------------------------------
+# -------------------------------------------------------------------
+# MAIN (dev only)
+# -------------------------------------------------------------------
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
