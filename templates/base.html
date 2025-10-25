@@ -22,18 +22,23 @@
         <div id="nav" class="collapse navbar-collapse">
           {% if current_user.is_authenticated %}
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-            {{ navlink('dashboard', 'Dashboard') }}
-            {{ navlink('items', 'Items') }}
-            {{ navlink('categories', 'Categories') }}
-            {{ navlink('receive', 'Receive') }}
-            {{ navlink('issue', 'Issue (FIFO)') }}
-            {{ navlink('reports', 'Reports/Export') }}
+            {{ navlink('dashboard', 'แดชบอร์ด') }}
+            {{ navlink('items', 'สินค้า') }}
+            {{ navlink('categories', 'หมวดหมู่') }}
+            {{ navlink('receive', 'รับเข้า') }}
+            {{ navlink('issue', 'จ่ายออก (FIFO)') }}
+            {{ navlink('reports', 'รายงาน/ส่งออก') }}
           </ul>
-          <span class="navbar-text me-3">{{ current_user.username }} {% if current_user.is_admin %}<span class="badge bg-warning text-dark">admin</span>{% endif %}</span>
-          <a class="btn btn-outline-light" href="{{ url_for('logout') }}">Logout</a>
+          <span class="navbar-text me-3">
+            {{ current_user.username }}
+            {% if current_user.is_admin %}
+              <span class="badge bg-warning text-dark">ผู้ดูแล</span>
+            {% endif %}
+          </span>
+          <a class="btn btn-outline-light" href="{{ url_for('logout') }}">ออกจากระบบ</a>
           {% else %}
           <div class="ms-auto">
-            <a class="btn btn-light" href="{{ url_for('login') }}">Login</a>
+            <a class="btn btn-light" href="{{ url_for('login') }}">เข้าสู่ระบบ</a>
           </div>
           {% endif %}
         </div>
@@ -57,8 +62,8 @@
     <footer class="container container-narrow mb-5">
       <hr>
       <div class="d-flex justify-content-between">
-        <div>© {{ 2025 }} CTR STOCK SYSTEM</div>
-        <div><a href="https://render.com" target="_blank" rel="noopener">Deploy on Render</a></div>
+        <div>© 2025 WINDSOR911</div>
+        <!-- เอาลิงก์ Deploy on Render ออก -->
       </div>
     </footer>
 
