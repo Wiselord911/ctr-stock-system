@@ -76,7 +76,7 @@ class StockLog(db.Model):
 # --------------------------------------------------
 # HELPERS
 # --------------------------------------------------
-def send_email(subject: str, recipient: str, html_body: str, text_body: str = ""):
+def send_email(subject: str, recipient: str, html_body: str, text_body: str = "") -> bool:
     """ส่งอีเมลผ่าน SMTP (STARTTLS)"""
     if not (MAIL_SERVER and MAIL_USERNAME and MAIL_PASSWORD):
         app.logger.error("EMAIL NOT CONFIGURED: missing MAIL_SERVER/MAIL_USERNAME/MAIL_PASSWORD")
@@ -103,13 +103,10 @@ def generate_reset_token(email: str) -> str:
     return serializer.dumps(email, salt=SECURITY_PASSWORD_SALT)
 
 def verify_reset_token(token: str, max_age_seconds: int = 3600) -> str | None:
-    """คืนค่า email ถ้า token ถูกต้องและยังไม่หมดอายุ (ค่าเริ่มต้น 1 ชั่วโมง)"""
+    """คืนค่า email ถ้า token ถูกต้องและยังไม่หมดอายุ (ดีฟอลต์ 1 ชม.)"""
     try:
-        email = serializer.loads(token, salt=SECURITY_PASSWORD_SALT, max_age=max_age_seconds)
-        return email
-    except SignatureExpired:
-        return None
-    except BadSignature:
+        return serializer.loads(token, salt=SECURITY_PASSWORD_SALT, max_age=max_age_seconds)
+    except (SignatureExpired, BadSignature):
         return None
 
 # --------------------------------------------------
@@ -172,7 +169,7 @@ def reset_request():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         user = User.query.filter_by(email=email).first()
-        # ไม่บอกว่าอีเมลมี/ไม่มีเพื่อความปลอดภัย
+        # เพื่อความปลอดภัย ไม่เฉลยว่าอีเมลมี/ไม่มี
         if user:
             token = generate_reset_token(user.email)
             reset_link = url_for("reset_password", token=token, _external=True)
@@ -180,7 +177,7 @@ def reset_request():
             text = f"กดลิงก์เพื่อตั้งรหัสผ่านใหม่: {reset_link}"
             ok = send_email("ตั้งรหัสผ่านใหม่ - CTR STOCK SYSTEM", user.email, html, text)
             if not ok:
-                flash("ไม่สามารถส่งอีเมลได้ กรุณาตรวจสอบการตั้งค่าเมลของเซิร์ฟเวอร์", "danger")
+                flash("ส่งอีเมลไม่สำเร็จ กรุณาตรวจสอบการตั้งค่าเมลของเซิร์ฟเวอร์", "danger")
                 return redirect(url_for("reset_request"))
         flash("ถ้าอีเมลนี้อยู่ในระบบ เราได้ส่งลิงก์รีเซ็ตรหัสผ่านให้แล้ว (ลิงก์มีอายุ 60 นาที)", "info")
         return redirect(url_for("login_get"))
@@ -255,11 +252,9 @@ def items():
         receives = StockLog.query.filter_by(item_id=it.id, type="receive").all()
         issues = StockLog.query.filter_by(item_id=it.id, type="issue").all()
         balance = sum([r.quantity for r in receives]) - sum([i.quantity for i in issues])
-        next_expiry = (
-            min([r.expiry_date for r in receives if r.expiry_date]) if receives else None
-        )
-        last_receive = max([r.created_at for r in receives]) if receives else None
-        last_issue = max([i.created_at for i in issues]) if issues else None
+        next_expiry = min([r.expiry_date for r in receives if r.expiry_date], default=None)
+        last_receive = max([r.created_at for r in receives], default=None)
+        last_issue = max([i.created_at for i in issues], default=None)
         data.append({
             "id": it.id,
             "name": it.name,
@@ -406,6 +401,7 @@ def issue():
             "created_at": log.created_at
         })
 
+    # คำนวณคงเหลือของแต่ละสินค้า
     items_with_balance = []
     for it in Item.query.all():
         rec = sum([r.quantity for r in StockLog.query.filter_by(item_id=it.id, type="receive").all()])
@@ -540,10 +536,20 @@ def reports():
     )
 
 # --------------------------------------------------
+# UTIL: INIT DB (ใช้ครั้งเดียว แล้วลบทิ้งได้)
+# --------------------------------------------------
+@app.route("/initdb")
+def initdb():
+    try:
+        db.create_all()
+        return "✅ Database initialized successfully!"
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+# --------------------------------------------------
 # MAIN
 # --------------------------------------------------
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
     app.run(host="0.0.0.0", port=5000, debug=True)
-
