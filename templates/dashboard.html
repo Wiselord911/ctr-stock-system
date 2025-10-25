@@ -1,72 +1,86 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="py-4">
-  <h2 class="mb-4">📊 แดชบอร์ดระบบ CTR STOCK SYSTEM</h2>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">แดชบอร์ด</h2>
+    <div class="text-muted small">ยินดีต้อนรับ{{ ' ' + current_user.email if current_user else '' }}</div>
+  </div>
 
-  <!-- สรุปยอดรวม -->
+  <!-- Summary cards -->
   <div class="row g-3 mb-4">
-    <div class="col-md-3 col-sm-6">
-      <div class="card text-center p-3">
-        <h5>จำนวนสินค้าทั้งหมด</h5>
-        <h3 class="text-info">{{ total_items or 0 }}</h3>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card p-3 text-center">
+        <div class="text-muted">จำนวนสินค้า</div>
+        <div class="h3 mb-0">{{ total_items or 0 }}</div>
       </div>
     </div>
-    <div class="col-md-3 col-sm-6">
-      <div class="card text-center p-3">
-        <h5>รับเข้าสินค้า</h5>
-        <h3 class="text-success">{{ total_receive or 0 }}</h3>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card p-3 text-center">
+        <div class="text-muted">ประเภทสินค้า</div>
+        <div class="h3 mb-0">{{ total_categories or 0 }}</div>
       </div>
     </div>
-    <div class="col-md-3 col-sm-6">
-      <div class="card text-center p-3">
-        <h5>เบิกออกสินค้า</h5>
-        <h3 class="text-danger">{{ total_issue or 0 }}</h3>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card p-3 text-center">
+        <div class="text-muted">รับเข้ารายการ</div>
+        <div class="h3 text-success mb-0">{{ total_receive or 0 }}</div>
       </div>
     </div>
-    <div class="col-md-3 col-sm-6">
-      <div class="card text-center p-3">
-        <h5>ประเภทสินค้า</h5>
-        <h3 class="text-warning">{{ total_categories or 0 }}</h3>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card p-3 text-center">
+        <div class="text-muted">เบิกรายการ</div>
+        <div class="h3 text-danger mb-0">{{ total_issue or 0 }}</div>
       </div>
     </div>
   </div>
 
-  <!-- ตารางแสดงรายการล่าสุด -->
+  <!-- Quick actions -->
+  <div class="mb-3 d-flex flex-wrap gap-2">
+    <a href="{{ url_for('items') }}" class="btn btn-outline-light">📦 รายการสินค้า</a>
+    <a href="{{ url_for('receive') }}" class="btn btn-outline-success">⬆️ รับเข้า</a>
+    <a href="{{ url_for('issue') }}" class="btn btn-outline-danger">⬇️ เบิกออก</a>
+    <a href="{{ url_for('categories') }}" class="btn btn-outline-light">🗂️ ประเภท</a>
+    <a href="{{ url_for('reports') }}" class="btn btn-outline-info">📑 รายงาน</a>
+  </div>
+
+  <!-- Latest logs -->
   <div class="card p-3">
-    <h5 class="mb-3">รายการเคลื่อนไหวล่าสุด</h5>
+    <h5 class="mb-3">ความเคลื่อนไหวล่าสุด</h5>
     <div class="table-responsive">
       <table class="table table-hover align-middle">
         <thead>
           <tr>
-            <th>ชื่อสินค้า</th>
+            <th>สินค้า</th>
             <th>ประเภท</th>
-            <th>จำนวน</th>
-            <th>ประเภทการเคลื่อนไหว</th>
+            <th class="text-end">จำนวน</th>
+            <th>ประเภทเคลื่อนไหว</th>
             <th>วันที่</th>
           </tr>
         </thead>
         <tbody>
-          {% if latest_logs %}
-            {% for log in latest_logs %}
+          {% if latest_logs and latest_logs|length %}
+            {% for row in latest_logs %}
               <tr>
-                <td>{{ log.item_name }}</td>
-                <td>{{ log.category_name or '-' }}</td>
-                <td>{{ log.quantity }}</td>
+                <td>{{ row.item_name or '-' }}</td>
+                <td>{{ row.category_name or '-' }}</td>
+                <td class="text-end">{{ row.quantity or 0 }}</td>
                 <td>
-                  {% if log.type == 'receive' %}
+                  {% if row.type == 'receive' %}
                     <span class="badge bg-success">รับเข้า</span>
-                  {% elif log.type == 'issue' %}
+                  {% elif row.type == 'issue' %}
                     <span class="badge bg-danger">เบิกออก</span>
                   {% else %}
-                    <span class="badge bg-secondary">อื่น ๆ</span>
+                    <span class="badge bg-secondary">{{ row.type or '-' }}</span>
                   {% endif %}
                 </td>
-                <td>{{ log.date.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td>
+                  {% if row.date %}{{ row.date.strftime('%d/%m/%Y %H:%M') }}{% else %}-{% endif %}
+                </td>
               </tr>
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="5" class="text-center text-muted">ยังไม่มีข้อมูลการเคลื่อนไหว</td>
+              <td colspan="5" class="text-center text-muted py-4">ยังไม่มีความเคลื่อนไหว</td>
             </tr>
           {% endif %}
         </tbody>
