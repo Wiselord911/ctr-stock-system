@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="h4">Receive Stock</h1>
+<form method="post" class="row g-3">
+  <div class="col-md-5">
+    <label class="form-label">สินค้า</label>
+    <select class="form-select" name="item_id" required>
+      <option value="" selected disabled>เลือกสินค้า</option>
+      {% for i in items %}<option value="{{ i.id }}">{{ i.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">จำนวน</label>
+    <input type="number" step="0.01" min="0.01" name="quantity" class="form-control" required>
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">หน่วย</label>
+    <input name="unit" class="form-control" placeholder="ชิ้น / กล่อง" required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">วันหมดอายุ (ถ้ามี)</label>
+    <input type="date" name="expiry" class="form-control">
+  </div>
+  <div class="col-12">
+    <label class="form-label">หมายเหตุ</label>
+    <input name="note" class="form-control" placeholder="เช่น รับเข้า lot ใหม่">
+  </div>
+  <div class="col-12">
+    <button class="btn btn-success" data-confirm="ยืนยันรับเข้าสินค้า?">บันทึก</button>
+  </div>
+</form>
+{% endblock %}

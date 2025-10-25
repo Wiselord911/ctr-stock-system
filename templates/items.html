@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-2">
+  <h1 class="h4 m-0">Items</h1>
+  <form class="d-flex" method="post" action="{{ url_for('items_add') }}">
+    <input class="form-control me-2" name="name" placeholder="ชื่อสินค้า..." required>
+    <select class="form-select me-2" name="category_id" required>
+      <option value="" selected disabled>เลือกหมวดหมู่</option>
+      {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-primary" data-confirm="ยืนยันที่จะบันทึกใช่หรือไม่?">เพิ่ม</button>
+  </form>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead><tr><th>#</th><th>ชื่อ</th><th>หมวดหมู่</th><th>คงเหลือ</th><th>จัดการ</th></tr></thead>
+    <tbody>
+      {% for i in items %}
+      <tr>
+        <td>{{ i.id }}</td>
+        <td>{{ i.name }}</td>
+        <td>{{ i.category.name if i.category else '-' }}</td>
+        <td>{{ i.total_qty }}</td>
+        <td>
+          <div class="d-flex gap-2">
+            <form method="post" action="{{ url_for('items_edit', item_id=i.id) }}">
+              <input type="hidden" name="action" value="edit">
+              <input class="form-control form-control-sm" name="name" value="{{ i.name }}" required>
+              <button class="btn btn-sm btn-outline-secondary" data-confirm="ยืนยันแก้ไขชื่อสินค้า?">แก้ไข</button>
+            </form>
+            <a href="{{ url_for('items_delete', item_id=i.id) }}" class="btn btn-sm btn-outline-danger"
+               data-confirm="ลบสินค้าและสต็อคทั้งหมดของรายการนี้?">ลบ</a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

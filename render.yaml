@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ctr-stock-system
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      # Uncomment and set if using managed Postgres on Render
+      # - key: DATABASE_URL
+      #   value: postgresql+psycopg2://USER:PASSWORD@HOST:PORT/DB

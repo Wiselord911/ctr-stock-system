@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="h4">Issue Stock (FIFO)</h1>
+<form method="post" class="row g-3">
+  <div class="col-md-6">
+    <label class="form-label">สินค้า</label>
+    <select class="form-select" name="item_id" required>
+      <option value="" selected disabled>เลือกสินค้า</option>
+      {% for i in items %}<option value="{{ i.id }}">{{ i.name }} (คงเหลือ {{ i.total_qty }})</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">จำนวน</label>
+    <input type="number" step="0.01" min="0.01" name="quantity" class="form-control" required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">หมายเหตุ</label>
+    <input name="note" class="form-control" placeholder="เช่น เบิกใช้งาน">
+  </div>
+  <div class="col-12">
+    <button class="btn btn-danger" data-confirm="ยืนยันเบิกสินค้าแบบ FIFO?">บันทึก</button>
+  </div>
+</form>
+{% endblock %}

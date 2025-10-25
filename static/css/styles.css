@@ -1,0 +1,6 @@
+
+:root{--gap:14px}
+.container-narrow{max-width:1080px}
+.table th, .table td{vertical-align:middle}
+.badge-xs{font-size:.75rem}
+footer{opacity:.7;font-size:.9rem}

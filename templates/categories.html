@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-2">
+  <h1 class="h4 m-0">Categories</h1>
+  <form class="d-flex" method="post" action="{{ url_for('categories_add') }}">
+    <input class="form-control me-2" name="name" placeholder="ชื่อหมวดหมู่..." required>
+    <button class="btn btn-primary" data-confirm="ยืนยันที่จะบันทึกใช่หรือไม่?">เพิ่ม</button>
+  </form>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead><tr><th>#</th><th>ชื่อ</th><th>จำนวนสินค้า</th><th>จัดการ</th></tr></thead>
+    <tbody>
+      {% for c in categories %}
+      <tr>
+        <td>{{ c.id }}</td>
+        <td>{{ c.name }}</td>
+        <td>{{ c.items|length }}</td>
+        <td>
+          <div class="d-flex gap-2">
+            <form method="post" action="{{ url_for('categories_edit', category_id=c.id) }}">
+              <input class="form-control form-control-sm" name="name" value="{{ c.name }}" required>
+              <button class="btn btn-sm btn-outline-secondary" data-confirm="ยืนยันแก้ไขหมวดหมู่?">แก้ไข</button>
+            </form>
+            <a href="{{ url_for('categories_delete', category_id=c.id) }}" class="btn btn-sm btn-outline-danger"
+               data-confirm="ลบหมวดหมู่? (สินค้ายังคงอยู่แต่จะไม่มีหมวด)">ลบ</a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

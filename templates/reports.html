@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="h4">Reports & Export</h1>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h6">รายการเคลื่อนไหวล่าสุด</h2>
+        <div class="table-responsive">
+          <table class="table table-striped table-sm">
+            <thead><tr><th>เวลา</th><th>ประเภท</th><th>สินค้า</th><th>จำนวน</th><th>ผู้ใช้</th></tr></thead>
+            <tbody>
+              {% for t in txs %}
+              <tr>
+                <td>{{ t.created_at }}</td>
+                <td>{{ t.type }}</td>
+                <td>{{ t.item.name }}</td>
+                <td>{{ t.quantity }}</td>
+                <td>{{ t.user.username if t.user else '-' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h6">Export CSV</h2>
+        <div class="d-grid gap-2">
+          <a class="btn btn-outline-primary" href="{{ url_for('export_csv', kind='items') }}">ดาวน์โหลด Items.csv</a>
+          <a class="btn btn-outline-primary" href="{{ url_for('export_csv', kind='lots') }}">ดาวน์โหลด Lots.csv</a>
+          <a class="btn btn-outline-primary" href="{{ url_for('export_csv', kind='transactions') }}">ดาวน์โหลด Transactions.csv</a>
+        </div>
+        {% if current_user.is_admin %}
+        <hr>
+        <h2 class="h6 text-danger">Admin Danger Zone</h2>
+        <a class="btn btn-outline-danger" href="{{ url_for('admin_delete_all') }}" data-confirm="ลบรายการสินค้าทั้งหมดและสต็อค?">ลบทั้งหมด</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
