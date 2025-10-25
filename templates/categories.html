@@ -1,34 +1,109 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-2">
-  <h1 class="h4 m-0">Categories</h1>
-  <form class="d-flex" method="post" action="{{ url_for('categories_add') }}">
-    <input class="form-control me-2" name="name" placeholder="ชื่อหมวดหมู่..." required>
-    <button class="btn btn-primary" data-confirm="ยืนยันที่จะบันทึกใช่หรือไม่?">เพิ่ม</button>
-  </form>
+<div class="py-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">🗂️ ประเภทสินค้า</h2>
+    <a href="{{ url_for('items') }}" class="btn btn-outline-light">ไปหน้ารายการสินค้า</a>
+  </div>
+
+  <!-- Add category form -->
+  <div class="card p-3 mb-4">
+    <h5 class="mb-3">เพิ่มประเภทสินค้าใหม่</h5>
+    <form method="post" action="{{ url_for('category_create') }}" onsubmit="return confirm('ยืนยันเพิ่มประเภทสินค้าใหม่ใช่หรือไม่?');" novalidate>
+      <div class="row g-3 align-items-center">
+        <div class="col-md-6">
+          <input type="text" name="name" class="form-control" placeholder="ชื่อประเภทสินค้า" required>
+        </div>
+        <div class="col-md-3 d-grid">
+          <button class="btn btn-success" type="submit">เพิ่มประเภท</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Category list -->
+  <div class="card p-3">
+    <h5 class="mb-3">รายการประเภทสินค้า</h5>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>ชื่อประเภทสินค้า</th>
+            <th class="text-center">จำนวนสินค้าในประเภทนี้</th>
+            <th class="text-center" style="width: 72px;">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if categories and categories|length %}
+            {% for cat in categories %}
+              <tr>
+                <td>{{ cat.name }}</td>
+                <td class="text-center">{{ cat.item_count or 0 }}</td>
+                <td class="text-center">
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M3 9a1 1 0 1 1 0-2 1 1 0 0 1 0 2m5 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2m5-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+                      </svg>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                      <li>
+                        <button class="dropdown-item" type="button"
+                                onclick="openEditModal('{{ cat.id }}', '{{ cat.name }}')">แก้ไข</button>
+                      </li>
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <form method="post" action="{{ url_for('category_delete', category_id=cat.id) }}"
+                              onsubmit="return confirm('ยืนยันลบประเภท \"{{ cat.name }}\" ใช่หรือไม่?');">
+                          <button type="submit" class="dropdown-item text-danger">ลบ</button>
+                        </form>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="3" class="text-center text-muted py-4">ยังไม่มีประเภทสินค้า</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
-<div class="table-responsive">
-  <table class="table table-hover">
-    <thead><tr><th>#</th><th>ชื่อ</th><th>จำนวนสินค้า</th><th>จัดการ</th></tr></thead>
-    <tbody>
-      {% for c in categories %}
-      <tr>
-        <td>{{ c.id }}</td>
-        <td>{{ c.name }}</td>
-        <td>{{ c.items|length }}</td>
-        <td>
-          <div class="d-flex gap-2">
-            <form method="post" action="{{ url_for('categories_edit', category_id=c.id) }}">
-              <input class="form-control form-control-sm" name="name" value="{{ c.name }}" required>
-              <button class="btn btn-sm btn-outline-secondary" data-confirm="ยืนยันแก้ไขหมวดหมู่?">แก้ไข</button>
-            </form>
-            <a href="{{ url_for('categories_delete', category_id=c.id) }}" class="btn btn-sm btn-outline-danger"
-               data-confirm="ลบหมวดหมู่? (สินค้ายังคงอยู่แต่จะไม่มีหมวด)">ลบ</a>
+
+<!-- Modal แก้ไขประเภท -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title" id="editModalLabel">แก้ไขชื่อประเภทสินค้า</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{{ url_for('category_update') }}" onsubmit="return confirm('ยืนยันการแก้ไขชื่อประเภทสินค้าใช่หรือไม่?');">
+        <div class="modal-body">
+          <input type="hidden" id="editCategoryId" name="id">
+          <div class="mb-3">
+            <label class="form-label">ชื่อประเภทสินค้าใหม่</label>
+            <input type="text" id="editCategoryName" name="name" class="form-control" required>
           </div>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
+
+<script>
+function openEditModal(id, name) {
+  document.getElementById('editCategoryId').value = id;
+  document.getElementById('editCategoryName').value = name;
+  new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+</script>
 {% endblock %}
