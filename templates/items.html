@@ -1,40 +1,133 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-2">
-  <h1 class="h4 m-0">Items</h1>
-  <form class="d-flex" method="post" action="{{ url_for('items_add') }}">
-    <input class="form-control me-2" name="name" placeholder="ชื่อสินค้า..." required>
-    <select class="form-select me-2" name="category_id" required>
-      <option value="" selected disabled>เลือกหมวดหมู่</option>
-      {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
-    </select>
-    <button class="btn btn-primary" data-confirm="ยืนยันที่จะบันทึกใช่หรือไม่?">เพิ่ม</button>
+<div class="py-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">📦 รายการสินค้า</h2>
+    <a href="{{ url_for('item_create') }}" class="btn btn-primary">
+      + เพิ่มสินค้า
+    </a>
+  </div>
+
+  <!-- Filters -->
+  <form class="row g-2 mb-3" method="get" action="{{ url_for('items') }}">
+    <div class="col-md-6">
+      <input type="search" name="q" value="{{ request.args.get('q','') }}"
+             class="form-control" placeholder="ค้นหาชื่อสินค้า...">
+    </div>
+    <div class="col-md-4">
+      <select name="category_id" class="form-select">
+        <option value="">ทุกประเภท</option>
+        {% for cat in categories %}
+          <option value="{{ cat.id }}"
+            {% if request.args.get('category_id') and request.args.get('category_id')|int == cat.id %}selected{% endif %}>
+            {{ cat.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid">
+      <button class="btn btn-outline-light" type="submit">ค้นหา</button>
+    </div>
   </form>
-</div>
-<div class="table-responsive">
-  <table class="table table-hover">
-    <thead><tr><th>#</th><th>ชื่อ</th><th>หมวดหมู่</th><th>คงเหลือ</th><th>จัดการ</th></tr></thead>
-    <tbody>
-      {% for i in items %}
-      <tr>
-        <td>{{ i.id }}</td>
-        <td>{{ i.name }}</td>
-        <td>{{ i.category.name if i.category else '-' }}</td>
-        <td>{{ i.total_qty }}</td>
-        <td>
-          <div class="d-flex gap-2">
-            <form method="post" action="{{ url_for('items_edit', item_id=i.id) }}">
-              <input type="hidden" name="action" value="edit">
-              <input class="form-control form-control-sm" name="name" value="{{ i.name }}" required>
-              <button class="btn btn-sm btn-outline-secondary" data-confirm="ยืนยันแก้ไขชื่อสินค้า?">แก้ไข</button>
-            </form>
-            <a href="{{ url_for('items_delete', item_id=i.id) }}" class="btn btn-sm btn-outline-danger"
-               data-confirm="ลบสินค้าและสต็อคทั้งหมดของรายการนี้?">ลบ</a>
-          </div>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+
+  <!-- Table -->
+  <div class="card p-3">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>ชื่อสินค้า</th>
+            <th>ประเภท</th>
+            <th class="text-end">คงเหลือล่าสุด</th>
+            <th>วันหมดอายุถัดไป (FIFO)</th>
+            <th>รับเข้าล่าสุด</th>
+            <th>เบิกออกล่าสุด</th>
+            <th class="text-center" style="width:72px;">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if items and items|length %}
+            {% for it in items %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ it.name }}</div>
+                  {% if it.low_stock %}
+                    <span class="badge bg-danger">ใกล้หมด</span>
+                  {% endif %}
+                </td>
+                <td>{{ it.category_name or '-' }}</td>
+                <td class="text-end">{{ it.balance or 0 }}</td>
+                <td>
+                  {% if it.next_expiry %}
+                    {{ it.next_expiry.strftime('%d/%m/%Y') }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if it.last_received_at %}
+                    {{ it.last_received_at.strftime('%d/%m/%Y %H:%M') }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if it.last_issued_at %}
+                    {{ it.last_issued_at.strftime('%d/%m/%Y %H:%M') }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="เมนู">
+                      <!-- ไอคอน 3 จุด -->
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M3 9a1 1 0 1 1 0-2 1 1 0 0 1 0 2m5 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2m5-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+                      </svg>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                      <li>
+                        <a class="dropdown-item" href="{{ url_for('item_update', item_id=it.id) }}">แก้ไข</a>
+                      </li>
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <form method="post" action="{{ url_for('item_delete', item_id=it.id) }}" onsubmit="return confirm('ยืนยันการลบ \"{{ it.name }}\" ?');">
+                          <button type="submit" class="dropdown-item text-danger">ลบ</button>
+                        </form>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">ยังไม่มีรายการสินค้า</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination (ถ้ามี) -->
+    {% if total_pages and total_pages > 1 %}
+      <nav class="mt-2">
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if page<=1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('items', q=request.args.get('q',''), category_id=request.args.get('category_id',''), page=page-1) }}">ก่อนหน้า</a>
+          </li>
+          {% for p in range(1, total_pages+1) %}
+            <li class="page-item {% if p==page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('items', q=request.args.get('q',''), category_id=request.args.get('category_id',''), page=p) }}">{{ p }}</a>
+            </li>
+          {% endfor %}
+          <li class="page-item {% if page>=total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('items', q=request.args.get('q',''), category_id=request.args.get('category_id',''), page=page+1) }}">ถัดไป</a>
+          </li>
+        </ul>
+      </nav>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}
