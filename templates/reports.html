@@ -1,46 +1,129 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<h1 class="h4">Reports & Export</h1>
+<div class="py-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">📑 รายงานสรุปสต็อกสินค้า</h2>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light">กลับหน้าแดชบอร์ด</a>
+  </div>
 
-<div class="row g-3">
-  <div class="col-md-6">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-        <h2 class="h6">รายการเคลื่อนไหวล่าสุด</h2>
-        <div class="table-responsive">
-          <table class="table table-striped table-sm">
-            <thead><tr><th>เวลา</th><th>ประเภท</th><th>สินค้า</th><th>จำนวน</th><th>ผู้ใช้</th></tr></thead>
-            <tbody>
-              {% for t in txs %}
-              <tr>
-                <td>{{ t.created_at }}</td>
-                <td>{{ t.type }}</td>
-                <td>{{ t.item.name }}</td>
-                <td>{{ t.quantity }}</td>
-                <td>{{ t.user.username if t.user else '-' }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+  <!-- Filter -->
+  <div class="card p-3 mb-4">
+    <form class="row g-3 align-items-end" method="get" action="{{ url_for('reports') }}">
+      <div class="col-md-3">
+        <label class="form-label">ช่วงวันที่เริ่มต้น</label>
+        <input type="date" name="from" value="{{ request.args.get('from','') }}" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">ถึงวันที่</label>
+        <input type="date" name="to" value="{{ request.args.get('to','') }}" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">ประเภทสินค้า</label>
+        <select name="category_id" class="form-select">
+          <option value="">ทุกประเภท</option>
+          {% for cat in categories %}
+            <option value="{{ cat.id }}"
+              {% if request.args.get('category_id') and request.args.get('category_id')|int == cat.id %}selected{% endif %}>
+              {{ cat.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-primary w-100">แสดงรายงาน</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+      <div class="card text-center p-3">
+        <h6>ยอดรวมสินค้าทั้งหมด</h6>
+        <h3 class="text-info">{{ total_items or 0 }}</h3>
+      </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+      <div class="card text-center p-3">
+        <h6>จำนวนรับเข้ารวม</h6>
+        <h3 class="text-success">{{ total_received or 0 }}</h3>
+      </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+      <div class="card text-center p-3">
+        <h6>จำนวนเบิกออกรวม</h6>
+        <h3 class="text-danger">{{ total_issued or 0 }}</h3>
+      </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+      <div class="card text-center p-3">
+        <h6>ยอดคงเหลือรวม</h6>
+        <h3 class="text-warning">{{ total_balance or 0 }}</h3>
       </div>
     </div>
   </div>
-  <div class="col-md-6">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-        <h2 class="h6">Export CSV</h2>
-        <div class="d-grid gap-2">
-          <a class="btn btn-outline-primary" href="{{ url_for('export_csv', kind='items') }}">ดาวน์โหลด Items.csv</a>
-          <a class="btn btn-outline-primary" href="{{ url_for('export_csv', kind='lots') }}">ดาวน์โหลด Lots.csv</a>
-          <a class="btn btn-outline-primary" href="{{ url_for('export_csv', kind='transactions') }}">ดาวน์โหลด Transactions.csv</a>
-        </div>
-        {% if current_user.is_admin %}
-        <hr>
-        <h2 class="h6 text-danger">Admin Danger Zone</h2>
-        <a class="btn btn-outline-danger" href="{{ url_for('admin_delete_all') }}" data-confirm="ลบรายการสินค้าทั้งหมดและสต็อค?">ลบทั้งหมด</a>
+
+  <!-- Table -->
+  <div class="card p-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h5 class="mb-0">ตารางสรุปรายการสต็อก</h5>
+      <div>
+        {% if export_csv_url %}
+          <a href="{{ export_csv_url }}" class="btn btn-sm btn-outline-light me-2">Export CSV</a>
+        {% endif %}
+        {% if export_pdf_url %}
+          <a href="{{ export_pdf_url }}" class="btn btn-sm btn-outline-light">Export PDF</a>
         {% endif %}
       </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>ชื่อสินค้า</th>
+            <th>ประเภท</th>
+            <th class="text-end">คงเหลือล่าสุด</th>
+            <th class="text-end">รวมรับเข้า</th>
+            <th class="text-end">รวมเบิกออก</th>
+            <th>วันหมดอายุถัดไป</th>
+            <th>รับเข้าล่าสุด</th>
+            <th>เบิกออกล่าสุด</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if report_data and report_data|length %}
+            {% for r in report_data %}
+              <tr>
+                <td>{{ r.item_name }}</td>
+                <td>{{ r.category_name or '-' }}</td>
+                <td class="text-end">{{ r.balance or 0 }}</td>
+                <td class="text-end text-success">{{ r.total_received or 0 }}</td>
+                <td class="text-end text-danger">{{ r.total_issued or 0 }}</td>
+                <td>
+                  {% if r.next_expiry %}
+                    {{ r.next_expiry.strftime('%d/%m/%Y') }}
+                  {% else %}-{% endif %}
+                </td>
+                <td>
+                  {% if r.last_receive %}
+                    {{ r.last_receive.strftime('%d/%m/%Y %H:%M') }}
+                  {% else %}-{% endif %}
+                </td>
+                <td>
+                  {% if r.last_issue %}
+                    {{ r.last_issue.strftime('%d/%m/%Y %H:%M') }}
+                  {% else %}-{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="text-center text-muted py-4">ไม่พบข้อมูลสต็อกในช่วงเวลาที่เลือก</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
