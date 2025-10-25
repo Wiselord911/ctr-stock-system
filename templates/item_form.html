@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card p-4">
+      <h3 class="mb-3">
+        {% if item %}แก้ไขสินค้า{% else %}เพิ่มสินค้าใหม่{% endif %}
+      </h3>
+
+      <form method="post"
+            action="{% if item %}{{ url_for('item_update', item_id=item.id) }}{% else %}{{ url_for('item_create') }}{% endif %}"
+            novalidate>
+        <div class="mb-3">
+          <label class="form-label">ชื่อสินค้า</label>
+          <input class="form-control" type="text" name="name" required
+                 value="{{ item.name if item else '' }}" placeholder="เช่น ถุงมือยาง, หน้ากากอนามัย">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">ประเภทสินค้า (ถ้ามี)</label>
+          <select class="form-select" name="category_id">
+            <option value="">-- ไม่ระบุประเภท --</option>
+            {% for cat in categories %}
+              <option value="{{ cat.id }}"
+                {% if item and item.category_id==cat.id %}selected{% endif %}>
+                {{ cat.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('items') }}" class="btn btn-secondary">ยกเลิก</a>
+          <button class="btn btn-primary" type="submit">
+            {% if item %}บันทึกการแก้ไข{% else %}เพิ่มสินค้า{% endif %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
