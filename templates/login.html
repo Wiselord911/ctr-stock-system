@@ -21,8 +21,8 @@
 
       <div class="mt-3 d-flex justify-content-between">
         <a href="{{ url_for('register_get') }}">สมัครสมาชิก</a>
-        <!-- แก้ตรงนี้: เอา url_for('reset_request') ออก เพราะยังไม่มี route -->
-        <a href="#">ลืมรหัสผ่าน?</a>
+        <!-- ใช้ endpoint ที่เพิ่งเพิ่ม -->
+        <a href="{{ url_for('reset_request') }}">ลืมรหัสผ่าน?</a>
       </div>
     </div>
   </div>
