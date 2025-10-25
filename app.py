@@ -1,7 +1,12 @@
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+
 from flask import (
-    Flask, render_template, request, redirect, url_for, flash, jsonify
+    Flask, render_template, request, redirect, url_for, flash
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -11,7 +16,7 @@ from passlib.hash import pbkdf2_sha256
 from dotenv import load_dotenv
 
 # --------------------------------------------------
-# โหลด .env
+# ENV & APP
 # --------------------------------------------------
 load_dotenv()
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -20,6 +25,18 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.join(BASE_DIR, 'ctr_stock.db')}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Email config (SMTP)
+MAIL_SERVER = os.getenv("MAIL_SERVER", "")
+MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))           # 587 = STARTTLS
+MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")
+MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
+MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "true").lower() == "true"
+MAIL_SENDER = os.getenv("MAIL_SENDER", MAIL_USERNAME or "no-reply@example.com")
+
+# Token serializer for reset password
+SECURITY_PASSWORD_SALT = os.getenv("SECURITY_PASSWORD_SALT", "salt-for-reset")
+serializer = URLSafeTimedSerializer(app.secret_key)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -57,6 +74,45 @@ class StockLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # --------------------------------------------------
+# HELPERS
+# --------------------------------------------------
+def send_email(subject: str, recipient: str, html_body: str, text_body: str = ""):
+    """ส่งอีเมลผ่าน SMTP (STARTTLS)"""
+    if not (MAIL_SERVER and MAIL_USERNAME and MAIL_PASSWORD):
+        app.logger.error("EMAIL NOT CONFIGURED: missing MAIL_SERVER/MAIL_USERNAME/MAIL_PASSWORD")
+        return False
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = MAIL_SENDER
+    msg["To"] = recipient
+    if text_body:
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    try:
+        with smtplib.SMTP(MAIL_SERVER, MAIL_PORT) as server:
+            if MAIL_USE_TLS:
+                server.starttls()
+            server.login(MAIL_USERNAME, MAIL_PASSWORD)
+            server.sendmail(MAIL_SENDER, [recipient], msg.as_string())
+        return True
+    except Exception as e:
+        app.logger.exception(f"Failed to send email: {e}")
+        return False
+
+def generate_reset_token(email: str) -> str:
+    return serializer.dumps(email, salt=SECURITY_PASSWORD_SALT)
+
+def verify_reset_token(token: str, max_age_seconds: int = 3600) -> str | None:
+    """คืนค่า email ถ้า token ถูกต้องและยังไม่หมดอายุ (ค่าเริ่มต้น 1 ชั่วโมง)"""
+    try:
+        email = serializer.loads(token, salt=SECURITY_PASSWORD_SALT, max_age=max_age_seconds)
+        return email
+    except SignatureExpired:
+        return None
+    except BadSignature:
+        return None
+
+# --------------------------------------------------
 # LOGIN MANAGER
 # --------------------------------------------------
 @login_manager.user_loader
@@ -64,7 +120,7 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # --------------------------------------------------
-# AUTH ROUTES
+# AUTH
 # --------------------------------------------------
 @app.get("/login")
 def login_get():
@@ -109,6 +165,50 @@ def logout():
     logout_user()
     flash("ออกจากระบบแล้ว", "info")
     return redirect(url_for("login_get"))
+
+# ---------- Reset Password (FULL) ----------
+@app.route("/reset_request", methods=["GET", "POST"])
+def reset_request():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        user = User.query.filter_by(email=email).first()
+        # ไม่บอกว่าอีเมลมี/ไม่มีเพื่อความปลอดภัย
+        if user:
+            token = generate_reset_token(user.email)
+            reset_link = url_for("reset_password", token=token, _external=True)
+            html = render_template("email_reset.html", reset_link=reset_link, email=user.email)
+            text = f"กดลิงก์เพื่อตั้งรหัสผ่านใหม่: {reset_link}"
+            ok = send_email("ตั้งรหัสผ่านใหม่ - CTR STOCK SYSTEM", user.email, html, text)
+            if not ok:
+                flash("ไม่สามารถส่งอีเมลได้ กรุณาตรวจสอบการตั้งค่าเมลของเซิร์ฟเวอร์", "danger")
+                return redirect(url_for("reset_request"))
+        flash("ถ้าอีเมลนี้อยู่ในระบบ เราได้ส่งลิงก์รีเซ็ตรหัสผ่านให้แล้ว (ลิงก์มีอายุ 60 นาที)", "info")
+        return redirect(url_for("login_get"))
+    return render_template("reset_request.html", title="ลืมรหัสผ่าน")
+
+@app.route("/reset/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    email = verify_reset_token(token, max_age_seconds=3600)
+    if not email:
+        flash("ลิงก์ไม่ถูกต้องหรือหมดอายุแล้ว", "danger")
+        return redirect(url_for("reset_request"))
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        flash("ไม่พบบัญชีผู้ใช้", "danger")
+        return redirect(url_for("reset_request"))
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm", "")
+        if not password or password != confirm:
+            flash("รหัสผ่านไม่ตรงกัน", "danger")
+            return redirect(url_for("reset_password", token=token))
+        user.password_hash = pbkdf2_sha256.hash(password)
+        db.session.commit()
+        flash("ตั้งรหัสผ่านใหม่สำเร็จ! กรุณาเข้าสู่ระบบด้วยรหัสใหม่", "success")
+        return redirect(url_for("login_get"))
+
+    return render_template("reset_password.html", email=email, title="ตั้งรหัสผ่านใหม่")
 
 # --------------------------------------------------
 # DASHBOARD
@@ -158,12 +258,8 @@ def items():
         next_expiry = (
             min([r.expiry_date for r in receives if r.expiry_date]) if receives else None
         )
-        last_receive = (
-            max([r.created_at for r in receives]) if receives else None
-        )
-        last_issue = (
-            max([i.created_at for i in issues]) if issues else None
-        )
+        last_receive = max([r.created_at for r in receives]) if receives else None
+        last_issue = max([i.created_at for i in issues]) if issues else None
         data.append({
             "id": it.id,
             "name": it.name,
@@ -225,7 +321,7 @@ def item_delete(item_id):
     return redirect(url_for("items"))
 
 # --------------------------------------------------
-# RECEIVE (รับเข้า)
+# RECEIVE
 # --------------------------------------------------
 @app.get("/receive")
 @login_required
@@ -285,7 +381,7 @@ def receive_post():
     return redirect(url_for("receive"))
 
 # --------------------------------------------------
-# ISSUE (เบิกออก)
+# ISSUE
 # --------------------------------------------------
 @app.get("/issue")
 @login_required
@@ -310,7 +406,6 @@ def issue():
             "created_at": log.created_at
         })
 
-    # คำนวณคงเหลือของแต่ละสินค้า
     items_with_balance = []
     for it in Item.query.all():
         rec = sum([r.quantity for r in StockLog.query.filter_by(item_id=it.id, type="receive").all()])
@@ -445,7 +540,7 @@ def reports():
     )
 
 # --------------------------------------------------
-# RUN APP
+# MAIN
 # --------------------------------------------------
 if __name__ == "__main__":
     with app.app_context():
