@@ -7,3 +7,5 @@ pandas==2.2.2
 gunicorn==23.0.0
 psycopg2-binary==2.9.9
 wheel==0.44.0
+itsdangerous==2.2.0
+
