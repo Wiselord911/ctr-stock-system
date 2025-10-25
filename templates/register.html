@@ -1,21 +1,32 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-6">
-    <div class="card shadow">
-      <div class="card-body">
-        <h1 class="h4 mb-3">สมัครสมาชิกคนแรก (จะเป็น Admin)</h1>
-        <form method="post">
-          <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input name="username" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Password</label>
-            <input type="password" name="password" class="form-control" required>
-          </div>
-          <button class="btn btn-success w-100">Create Admin</button>
-        </form>
+  <div class="col-lg-5">
+    <div class="card p-4">
+      <h3 class="mb-3">สมัครสมาชิก</h3>
+
+      <form method="post" action="{{ url_for('register_post') }}" novalidate>
+        <div class="mb-3">
+          <label for="email" class="form-label">อีเมล</label>
+          <input id="email" class="form-control" name="email" type="email" required autocomplete="email">
+        </div>
+
+        <div class="mb-3">
+          <label for="password" class="form-label">รหัสผ่าน</label>
+          <input id="password" class="form-control" name="password" type="password" required autocomplete="new-password">
+        </div>
+
+        <div class="mb-3">
+          <label for="confirm" class="form-label">ยืนยันรหัสผ่าน</label>
+          <input id="confirm" class="form-control" name="confirm" type="password" required autocomplete="new-password">
+        </div>
+
+        <button class="btn btn-success w-100" type="submit">สมัครสมาชิก</button>
+      </form>
+
+      <div class="mt-3 text-center">
+        <span>มีบัญชีอยู่แล้ว? </span>
+        <a href="{{ url_for('login_get') }}">เข้าสู่ระบบ</a>
       </div>
     </div>
   </div>
