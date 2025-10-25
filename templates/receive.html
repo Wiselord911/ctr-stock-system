@@ -1,32 +1,176 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<h1 class="h4">Receive Stock</h1>
-<form method="post" class="row g-3">
-  <div class="col-md-5">
-    <label class="form-label">สินค้า</label>
-    <select class="form-select" name="item_id" required>
-      <option value="" selected disabled>เลือกสินค้า</option>
-      {% for i in items %}<option value="{{ i.id }}">{{ i.name }}</option>{% endfor %}
-    </select>
+<div class="py-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">⬆️ รับเข้าสินค้า</h2>
+    <a href="{{ url_for('items') }}" class="btn btn-outline-light">ไปหน้ารายการสินค้า</a>
   </div>
-  <div class="col-md-2">
-    <label class="form-label">จำนวน</label>
-    <input type="number" step="0.01" min="0.01" name="quantity" class="form-control" required>
+
+  <!-- Filters -->
+  <form class="row g-2 mb-3" method="get" action="{{ url_for('receive') }}">
+    <div class="col-md-5">
+      <input type="search" name="q" value="{{ request.args.get('q','') }}"
+             class="form-control" placeholder="ค้นหาชื่อสินค้าในประวัติรับเข้า...">
+    </div>
+    <div class="col-md-3">
+      <select name="category_id" class="form-select">
+        <option value="">ทุกประเภท</option>
+        {% for cat in categories %}
+          <option value="{{ cat.id }}"
+            {% if request.args.get('category_id') and request.args.get('category_id')|int == cat.id %}selected{% endif %}>
+            {{ cat.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <input type="date" class="form-control" name="from" value="{{ request.args.get('from','') }}" placeholder="จากวันที่">
+    </div>
+    <div class="col-md-2">
+      <input type="date" class="form-control" name="to" value="{{ request.args.get('to','') }}" placeholder="ถึงวันที่">
+    </div>
+    <div class="col-12 col-md-2 d-grid mt-2">
+      <button class="btn btn-outline-light" type="submit">ค้นหา</button>
+    </div>
+  </form>
+
+  <!-- Receive form -->
+  <div class="card p-3 mb-4">
+    <h5 class="mb-3">บันทึกรับเข้าสินค้า</h5>
+    <form method="post" action="{{ url_for('receive_post') }}" onsubmit="return confirm('ยืนยันบันทึกรับเข้าสินค้าตามข้อมูลที่กรอกใช่หรือไม่?');" novalidate>
+      <div class="row g-3">
+        <div class="col-md-5">
+          <label class="form-label">สินค้า</label>
+          {% if items_select %}
+            <!-- ดรอปดาวน์เลือกสินค้า -->
+            <select name="item_id" class="form-select" required>
+              <option value="">-- เลือกสินค้า --</option>
+              {% for it in items_select %}
+                <option value="{{ it.id }}">{{ it.name }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <!-- เผื่อบางโปรเจ็กต์ใช้ป้อนชื่ออิสระ -->
+            <input name="item_name" class="form-control" placeholder="พิมพ์ชื่อสินค้า" required>
+          {% endif %}
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">จำนวน</label>
+          <input type="number" name="quantity" class="form-control" min="1" step="1" required>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">วันหมดอายุ</label>
+          <input type="date" name="expiry_date" class="form-control">
+          <div class="form-text">ใส่เพื่อคุม FIFO</div>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">ล็อต/แบตช์ (ถ้ามี)</label>
+          <input type="text" name="batch_code" class="form-control" placeholder="เช่น B2409-01">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">หมายเหตุ</label>
+          <input type="text" name="note" class="form-control" placeholder="เช่น รับเข้าจากซัพพลายเออร์ A">
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label class="form-label d-block">&nbsp;</label>
+          <button class="btn btn-success w-100" type="submit">บันทึกรับเข้า</button>
+        </div>
+      </div>
+    </form>
   </div>
-  <div class="col-md-2">
-    <label class="form-label">หน่วย</label>
-    <input name="unit" class="form-control" placeholder="ชิ้น / กล่อง" required>
+
+  <!-- Table -->
+  <div class="card p-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <h5 class="mb-0">ประวัติการรับเข้า</h5>
+      {% if export_url %}
+        <a class="btn btn-sm btn-outline-light" href="{{ export_url }}">Export CSV</a>
+      {% endif %}
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>ชื่อสินค้า</th>
+            <th>ประเภท</th>
+            <th class="text-end">จำนวน</th>
+            <th>วันหมดอายุ</th>
+            <th>ล็อต/แบตช์</th>
+            <th>ผู้บันทึก</th>
+            <th>วันที่รับเข้า</th>
+            <th class="text-center" style="width: 72px;">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if receive_logs and receive_logs|length %}
+            {% for r in receive_logs %}
+              <tr>
+                <td>{{ r.item_name }}</td>
+                <td>{{ r.category_name or '-' }}</td>
+                <td class="text-end">{{ r.quantity }}</td>
+                <td>
+                  {% if r.expiry_date %}
+                    {{ r.expiry_date.strftime('%d/%m/%Y') }}
+                  {% else %}-{% endif %}
+                </td>
+                <td>{{ r.batch_code or '-' }}</td>
+                <td>{{ r.actor_name or '-' }}</td>
+                <td>{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td class="text-center">
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M3 9a1 1 0 1 1 0-2 1 1 0 0 1 0 2m5 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2m5-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+                      </svg>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                      <li>
+                        <a class="dropdown-item" href="{{ url_for('receive_edit', receive_id=r.id) }}">แก้ไข</a>
+                      </li>
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <form method="post" action="{{ url_for('receive_delete', receive_id=r.id) }}" onsubmit="return confirm('ยืนยันการลบรายการรับเข้าชิ้นนี้?');">
+                          <button type="submit" class="dropdown-item text-danger">ลบ</button>
+                        </form>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="text-center text-muted py-4">ยังไม่มีประวัติรับเข้า</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages and total_pages > 1 %}
+      <nav class="mt-2">
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if page<=1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('receive', q=request.args.get('q',''), category_id=request.args.get('category_id',''), from=request.args.get('from',''), to=request.args.get('to',''), page=page-1) }}">ก่อนหน้า</a>
+          </li>
+          {% for p in range(1, total_pages+1) %}
+            <li class="page-item {% if p==page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('receive', q=request.args.get('q',''), category_id=request.args.get('category_id',''), from=request.args.get('from',''), to=request.args.get('to',''), page=p) }}">{{ p }}</a>
+            </li>
+          {% endfor %}
+          <li class="page-item {% if page>=total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('receive', q=request.args.get('q',''), category_id=request.args.get('category_id',''), from=request.args.get('from',''), to=request.args.get('to',''), page=page+1) }}">ถัดไป</a>
+          </li>
+        </ul>
+      </nav>
+    {% endif %}
   </div>
-  <div class="col-md-3">
-    <label class="form-label">วันหมดอายุ (ถ้ามี)</label>
-    <input type="date" name="expiry" class="form-control">
-  </div>
-  <div class="col-12">
-    <label class="form-label">หมายเหตุ</label>
-    <input name="note" class="form-control" placeholder="เช่น รับเข้า lot ใหม่">
-  </div>
-  <div class="col-12">
-    <button class="btn btn-success" data-confirm="ยืนยันรับเข้าสินค้า?">บันทึก</button>
-  </div>
-</form>
+</div>
 {% endblock %}
