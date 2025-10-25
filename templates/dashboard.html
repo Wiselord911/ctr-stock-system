@@ -1,64 +1,74 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
-<div class="row g-3">
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="text-muted">Items</div>
-            <div class="display-6">{{ counts.items }}</div>
-          </div>
-          <span class="badge bg-primary">ทั้งหมด</span>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="text-muted">Categories</div>
-            <div class="display-6">{{ counts.categories }}</div>
-          </div>
-          <span class="badge bg-secondary">กลุ่ม</span>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="text-muted">Qty In Stock</div>
-            <div class="display-6">{{ counts.qty }}</div>
-          </div>
-          <span class="badge bg-success">คงเหลือ</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+<div class="py-4">
+  <h2 class="mb-4">📊 แดชบอร์ดระบบ CTR STOCK SYSTEM</h2>
 
-<div class="card shadow-sm mt-4">
-  <div class="card-body">
-    <h2 class="h5 mb-3">Recent Transactions</h2>
+  <!-- สรุปยอดรวม -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+      <div class="card text-center p-3">
+        <h5>จำนวนสินค้าทั้งหมด</h5>
+        <h3 class="text-info">{{ total_items or 0 }}</h3>
+      </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+      <div class="card text-center p-3">
+        <h5>รับเข้าสินค้า</h5>
+        <h3 class="text-success">{{ total_receive or 0 }}</h3>
+      </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+      <div class="card text-center p-3">
+        <h5>เบิกออกสินค้า</h5>
+        <h3 class="text-danger">{{ total_issue or 0 }}</h3>
+      </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+      <div class="card text-center p-3">
+        <h5>ประเภทสินค้า</h5>
+        <h3 class="text-warning">{{ total_categories or 0 }}</h3>
+      </div>
+    </div>
+  </div>
+
+  <!-- ตารางแสดงรายการล่าสุด -->
+  <div class="card p-3">
+    <h5 class="mb-3">รายการเคลื่อนไหวล่าสุด</h5>
     <div class="table-responsive">
-      <table class="table table-striped table-sm">
-        <thead><tr><th>Time</th><th>User</th><th>Type</th><th>Item</th><th>Qty</th><th>Note</th></tr></thead>
-        <tbody>
-          {% for t in txs %}
+      <table class="table table-hover align-middle">
+        <thead>
           <tr>
-            <td>{{ t.created_at }}</td>
-            <td>{{ t.user.username if t.user else '-' }}</td>
-            <td><span class="badge {% if t.type=='IN' %}bg-success{% else %}bg-danger{% endif %}">{{ t.type }}</span></td>
-            <td>{{ t.item.name }}</td>
-            <td>{{ t.quantity }}</td>
-            <td>{{ t.note or '' }}</td>
+            <th>ชื่อสินค้า</th>
+            <th>ประเภท</th>
+            <th>จำนวน</th>
+            <th>ประเภทการเคลื่อนไหว</th>
+            <th>วันที่</th>
           </tr>
-          {% endfor %}
+        </thead>
+        <tbody>
+          {% if latest_logs %}
+            {% for log in latest_logs %}
+              <tr>
+                <td>{{ log.item_name }}</td>
+                <td>{{ log.category_name or '-' }}</td>
+                <td>{{ log.quantity }}</td>
+                <td>
+                  {% if log.type == 'receive' %}
+                    <span class="badge bg-success">รับเข้า</span>
+                  {% elif log.type == 'issue' %}
+                    <span class="badge bg-danger">เบิกออก</span>
+                  {% else %}
+                    <span class="badge bg-secondary">อื่น ๆ</span>
+                  {% endif %}
+                </td>
+                <td>{{ log.date.strftime('%d/%m/%Y %H:%M') }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="text-center text-muted">ยังไม่มีข้อมูลการเคลื่อนไหว</td>
+            </tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
