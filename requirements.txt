@@ -1,3 +1,4 @@
+--only-binary=:all:
 Flask==3.0.3
 Flask-Login==0.6.3
 Flask-SQLAlchemy==3.1.1
