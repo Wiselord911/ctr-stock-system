@@ -1,26 +1,27 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-6">
-    <div class="card shadow">
-      <div class="card-body">
-        <h1 class="h4 mb-3">เข้าสู่ระบบ</h1>
-        <form method="post">
-          <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input name="username" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Password</label>
-            <input type="password" name="password" class="form-control" required>
-          </div>
-          <button class="btn btn-primary w-100">Login</button>
-        </form>
-        <div class="text-center mt-3">
-          {% if allow_register %}
-          <a href="{{ url_for('register') }}">สมัครสมาชิก (สร้างแอดมิน)</a>
-          {% endif %}
+  <div class="col-lg-5">
+    <div class="card p-4">
+      <h3 class="mb-3">เข้าสู่ระบบ</h3>
+
+      <form method="post" action="{{ url_for('login_post') }}" novalidate>
+        <div class="mb-3">
+          <label for="email" class="form-label">อีเมล</label>
+          <input id="email" class="form-control" name="email" type="email" required autocomplete="username">
         </div>
+
+        <div class="mb-3">
+          <label for="password" class="form-label">รหัสผ่าน</label>
+          <input id="password" class="form-control" name="password" type="password" required autocomplete="current-password">
+        </div>
+
+        <button class="btn btn-primary w-100" type="submit">เข้าสู่ระบบ</button>
+      </form>
+
+      <div class="mt-3 d-flex justify-content-between">
+        <a href="{{ url_for('register_get') }}">สมัครสมาชิก</a>
+        <a href="{{ url_for('reset_request') }}">ลืมรหัสผ่าน?</a>
       </div>
     </div>
   </div>
