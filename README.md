@@ -36,3 +36,4 @@ App runs at http://127.0.0.1:5000
 
 ## Notes
 - Free Render disk is ephemeral. For durable data use PostgreSQL (Render Managed DB) and set `DATABASE_URL`.
+# ctr-stock-system
