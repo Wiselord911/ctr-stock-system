@@ -4,9 +4,10 @@ services:
     env: python
     plan: free
     buildCommand: |
+      apt-get update && apt-get install -y build-essential
       pip install --upgrade pip setuptools wheel
       pip install -r requirements.txt
-    startCommand: gunicorn main:app   # ถ้าไฟล์คุณชื่อ main.py
+    startCommand: gunicorn main:app   # ถ้าไฟล์หลักชื่อ main.py
     envVars:
       - key: FLASK_ENV
         value: production
