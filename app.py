@@ -74,6 +74,19 @@ class StockLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # --------------------------------------------------
+# AUTO INIT DB FOR GUNICORN (runs on import)
+# --------------------------------------------------
+def _ensure_db_initialized():
+    try:
+        with app.app_context():
+            db.create_all()  # รันทุกครั้งที่แอป import (ไม่ซ้ำ ไม่พัง)
+    except Exception as e:
+        app.logger.exception(f"DB init failed: {e}")
+
+_ensure_db_initialized()
+
+
+# --------------------------------------------------
 # HELPERS
 # --------------------------------------------------
 def send_email(subject: str, recipient: str, html_body: str, text_body: str = "") -> bool:
